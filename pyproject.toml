@@ -1,0 +1,18 @@
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+pythonpath = ["backend"]
+testpaths = ["backend/tests"]
+addopts = "-q --strict-markers --cov=core --cov-report=term-missing --cov-fail-under=80"
+filterwarnings = ["ignore::DeprecationWarning:kombu.*"]
+
+[tool.coverage.run]
+branch = true
+omit = ["*/migrations/*", "*/management/*"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
