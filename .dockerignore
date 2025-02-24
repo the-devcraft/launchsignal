@@ -1,0 +1,11 @@
+.git
+.venv
+**/node_modules
+**/.next
+.env
+.test-tmp*
+**/__pycache__
+frontend/test-results
+frontend/playwright-report
+docs/screenshots
+runtime

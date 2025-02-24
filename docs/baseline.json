@@ -1,0 +1,11 @@
+{
+  "workload": "session-authenticated seeded findings read via Next proxy",
+  "concurrency": 1,
+  "warmup_requests": 10,
+  "samples": 100,
+  "client_os": "Windows",
+  "python": "3.12.14",
+  "p50_ms": 41.27,
+  "p95_ms": 155.47,
+  "max_ms": 175.44
+}
