@@ -24,11 +24,11 @@ jobs:
           POSTGRES_USER: launchsignal
           POSTGRES_PASSWORD: ci-only-password
         ports: ['5432:5432']
-        options: --health-cmd 'pg_isready -U launchsignal' --health-interval 3s --health-retries 20
+        options: --health-cmd "pg_isready -U launchsignal" --health-interval 3s --health-retries 20
       redis:
         image: redis:7.4-alpine
         ports: ['6379:6379']
-        options: --health-cmd 'redis-cli ping' --health-interval 3s --health-retries 20
+        options: --health-cmd "redis-cli ping" --health-interval 3s --health-retries 20
     env:
       DJANGO_SECRET_KEY: ci-only-not-a-deployment-secret
       DATABASE_URL: postgresql://launchsignal:ci-only-password@localhost:5432/launchsignal

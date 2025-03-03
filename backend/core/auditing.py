@@ -4,7 +4,7 @@ import http.client
 import ipaddress
 import socket
 import ssl
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 
 from bs4 import BeautifulSoup
 from django.conf import settings
@@ -16,13 +16,18 @@ class FetchPolicyError(Exception):
 
 def normalized_url(value):
     try:
+        if any(ord(char) <= 32 or ord(char) == 127 for char in value):
+            raise ValueError
         parsed = urlsplit(value)
         host = (parsed.hostname or "").encode("idna").decode("ascii").lower()
         if parsed.scheme != "https" or not host or parsed.username or parsed.password:
             raise ValueError
         if parsed.port not in (None, 443) or parsed.fragment:
             raise ValueError
-        return f"https://{host}{parsed.path or '/'}" + (f"?{parsed.query}" if parsed.query else "")
+        authority = f"[{host}]" if ":" in host else host
+        path = quote(parsed.path or "/", safe="/%:@!$&'()*+,;=-._~")
+        query = quote(parsed.query, safe="=&/?%:@!$'()*+,;-._~")
+        return f"https://{authority}{path}" + (f"?{query}" if query else "")
     except (ValueError, UnicodeError) as exc:
         raise FetchPolicyError("https_url_required") from exc
 

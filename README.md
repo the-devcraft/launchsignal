@@ -35,6 +35,8 @@ Screenshots are captured from the running application using synthetic demo data.
 
 Requires Docker Engine with Compose v2. Copy `.env.example` to `.env` and fill the five required secrets. Use URL-safe random values for `POSTGRES_PASSWORD` because it is embedded in `DATABASE_URL`; use at least 12 characters for `DEMO_PASSWORD`.
 
+With Python installed, `python scripts/setup_env.py` generates those local secrets without overwriting an existing `.env` or printing secrets. Then skip the manual copy/edit step below.
+
 ```sh
 cp .env.example .env
 # Fill POSTGRES_PASSWORD, DJANGO_SECRET_KEY, DEMO_PASSWORD,

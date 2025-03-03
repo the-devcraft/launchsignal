@@ -46,7 +46,10 @@ def execute_audit(run_id):
     started = time.perf_counter()
     with transaction.atomic():
         run = (
-            AuditRun.objects.select_for_update().select_related("project").filter(id=run_id).first()
+            AuditRun.objects.select_for_update(of=("self",))
+            .select_related("project")
+            .filter(id=run_id)
+            .first()
         )
         now = timezone.now()
         if not run or run.status in ("succeeded", "failed"):

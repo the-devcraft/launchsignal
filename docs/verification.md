@@ -5,7 +5,7 @@ This file records observed checks, not a promise of a flaw-free system.
 ## Local checks
 
 - PostgreSQL 17.11; Python 3.12.14; Windows loopback-only development services.
-- Backend: 43 tests passed in the initial expanded suite, including concurrent audit acceptance, concurrent payment replay and real in-process Celery delivery. The suite continues to grow with fixes; CI is the current source of truth.
+- Backend: 45 tests passed with 97.81% combined statement/branch coverage, including concurrent audit acceptance, concurrent payment replay and real in-process Celery delivery. CI is the current source of truth for subsequent changes.
 - Frontend: strict TypeScript, ESLint and the optimized Next build passed.
 - Browser: real login, assignment/status changes, site creation, queued baseline/healthy audits, workspace switching, billing isolation and logout. Automated WCAG A/AA desktop/mobile checks caught and drove contrast fixes.
 - Python dependency audit found no known vulnerabilities in the locked versions at verification time. This is not a guarantee against undisclosed vulnerabilities.

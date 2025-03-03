@@ -267,7 +267,7 @@ class ActionView(APIView):
         data.is_valid(raise_exception=True)
         with transaction.atomic():
             action = get_object_or_404(
-                Action.objects.select_for_update(),
+                Action.objects.select_for_update(of=("self",)),
                 finding_id=finding_id,
                 finding__run__project__workspace_id=workspace_id,
             )

@@ -33,6 +33,20 @@ def test_invalid_url(url):
         normalized_url(url)
 
 
+def test_url_encoding_and_ipv6_authority():
+    assert (
+        normalized_url("https://example.com/café?q=é") == "https://example.com/caf%C3%A9?q=%C3%A9"
+    )
+    assert normalized_url("https://[2606:4700:4700::1111]/") == "https://[2606:4700:4700::1111]/"
+    for value in [
+        "https://example.com/a b",
+        "https://example.com/\r\ninjected",
+        " https://example.com/",
+    ]:
+        with pytest.raises(FetchPolicyError):
+            normalized_url(value)
+
+
 def test_parser_explainable_rules():
     fixture = Path(__file__).parents[1] / "core/fixtures"
     assert analyze((fixture / "healthy.html").read_text()) == (100, [])
