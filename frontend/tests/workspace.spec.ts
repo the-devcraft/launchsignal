@@ -149,3 +149,62 @@ test("create site, process a real queued audit and isolate workspace data", asyn
     page.getByRole("heading", { name: "Welcome back." }),
   ).toBeVisible();
 });
+
+test("session boundary keeps the login screen until fresh workspace data arrives", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Welcome back." }),
+  ).toBeVisible();
+  let release!: () => void;
+  let captured!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const requested = new Promise<void>((resolve) => {
+    captured = resolve;
+  });
+  await page.route("**/api/workspaces", async (route) => {
+    captured();
+    await gate;
+    await route.continue();
+  });
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill(process.env.DEMO_PASSWORD || "");
+  await page.getByRole("button", { name: "Enter workspace" }).click();
+  await requested;
+  try {
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+    await expect(
+      page.getByRole("heading", { name: "Welcome back." }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Make the next move count." }),
+    ).not.toBeVisible();
+  } finally {
+    release();
+  }
+  await expect(
+    page.getByRole("heading", { name: "Make the next move count." }),
+  ).toBeVisible();
+});
+
+test("mobile sign-out remains visible and clears the session", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByRole("button", { name: "Sign out" })).toBeVisible();
+  await page.getByRole("button", { name: "Sign out" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Welcome back." }),
+  ).toBeVisible();
+});

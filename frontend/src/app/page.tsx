@@ -68,7 +68,8 @@ export default function Page() {
   const currentSpace = spaces.find((x) => x.workspace_id === workspace);
   const currentProject = projects.find((x) => x.id === project);
   const currentRun = runs.find((x) => x.id === selected);
-  const canWrite = currentSpace?.role !== "viewer";
+  const canWrite =
+    currentSpace?.role === "owner" || currentSpace?.role === "editor";
 
   const loadSpaces = useCallback(async () => {
     const result = await api<Workspace[]>("workspaces");
@@ -88,9 +89,15 @@ export default function Page() {
   }, [loadSpaces]);
 
   useEffect(() => {
-    if (!workspace) return;
     const stamp = ++generation.current;
     setMembers([]);
+    setProjects([]);
+    setProject("");
+    setRuns([]);
+    setSelected("");
+    setFindings([]);
+    setError("");
+    if (!workspace) return;
     api<{ id: number; name: string }[]>(`workspaces/${workspace}/members`)
       .then((items) => {
         if (generation.current === stamp) setMembers(items);
@@ -98,12 +105,6 @@ export default function Page() {
       .catch((e) => {
         if (generation.current === stamp) setError(e.message);
       });
-    setProjects([]);
-    setProject("");
-    setRuns([]);
-    setSelected("");
-    setFindings([]);
-    setError("");
     api<Project[]>(`workspaces/${workspace}/projects`)
       .then((items) => {
         if (generation.current !== stamp) return;
@@ -163,10 +164,10 @@ export default function Page() {
   }, [loadFindings, currentRun?.status]);
 
   useEffect(() => {
-    if (!workspace) return;
-    let active = true;
     setInvoices([]);
     setEvents([]);
+    if (!workspace) return;
+    let active = true;
     if (view === "billing")
       api<Invoice[]>(`workspaces/${workspace}/billing`)
         .then((x) => {
@@ -206,8 +207,8 @@ export default function Page() {
         }),
       });
       setCSRF(session.csrf_token);
-      setUser(session.user);
       await loadSpaces();
+      setUser(session.user);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -375,8 +376,22 @@ export default function Page() {
             onClick={async () => {
               try {
                 await api("auth/logout", { method: "POST" });
+                generation.current++;
+                runGeneration.current++;
+                findingGeneration.current++;
                 setUser(null);
+                setSpaces([]);
                 setWorkspace("");
+                setMembers([]);
+                setProjects([]);
+                setProject("");
+                setRuns([]);
+                setSelected("");
+                setFindings([]);
+                setInvoices([]);
+                setEvents([]);
+                setView("overview");
+                setError("");
               } catch (e) {
                 setError((e as Error).message);
               }

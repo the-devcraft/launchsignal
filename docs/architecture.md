@@ -20,6 +20,8 @@ Actions carry an incrementing version. A writer supplies the version they read. 
 
 ## Payment-event projection
 
+An event timestamp must fit the persisted PostgreSQL bigint range. An existing invoice's currency is treated as an invariant: a conflicting event is rejected with HTTP 409 without mutating billing state.
+
 The webhook verifies the Stripe signature against original bytes with a five-minute tolerance before interpreting invoice fields. PostgreSQL transaction-scoped advisory locks serialize event/invoice references even when the target rows do not exist. Sorted lock acquisition prevents reference-order deadlocks. A customer row lock then scopes the event to a workspace. Unique provider IDs and a SHA-256 payload fingerprint make exact replay a no-op and conflicting replay a 409.
 
 Supported snapshot events are `invoice.paid`, `invoice.payment_failed` and `invoice.voided`. Older or equal-time events cannot overwrite an existing invoice; the first received event wins ties. Paid/void states cannot be downgraded to a different terminal or open state. This deliberately conservative projection requires operator reconciliation for ambiguous equal-time provider events. It accepts USD/EUR/GBP integer amounts; it neither charges cards nor computes balances across currencies.

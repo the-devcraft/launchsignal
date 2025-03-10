@@ -96,7 +96,15 @@ def analyze(html):
     soup = BeautifulSoup(html, "html.parser")
     title = soup.title.get_text(strip=True) if soup.title else ""
     description = soup.find("meta", attrs={"name": "description"})
-    canonical = soup.find("link", rel="canonical")
+    headings = soup.find_all("h1")
+    canonicals = soup.find_all("link", rel="canonical")
+    canonical_valid = False
+    if len(canonicals) == 1:
+        try:
+            normalized_url(canonicals[0].get("href", "").strip())
+            canonical_valid = True
+        except FetchPolicyError:
+            pass
     rules = [
         (
             "title",
@@ -119,20 +127,20 @@ def analyze(html):
         (
             "heading",
             20,
-            len(soup.find_all("h1")) == 1,
+            len(headings) == 1 and bool(headings[0].get_text(strip=True)),
             "medium",
             "Clarify the primary heading",
-            "The page should have one clear primary H1 heading.",
+            "The page should have one non-empty primary H1 heading.",
             "Choose one descriptive H1.",
         ),
         (
             "canonical",
             15,
-            bool(canonical and canonical.get("href")),
+            canonical_valid,
             "medium",
             "Declare the canonical URL",
-            "A canonical link is not declared.",
-            "Add an absolute canonical URL for the preferred version of this page.",
+            "The page needs exactly one usable HTTPS canonical link.",
+            "Add one absolute HTTPS canonical URL for the preferred version of this page.",
         ),
         (
             "image_alt",

@@ -1077,9 +1077,12 @@ dialog .primary {
     display: none;
   }
   .nav-label,
-  .sidebar-note,
-  .account {
+  .sidebar-note {
     display: none;
+  }
+  .account {
+    display: flex;
+    padding: 12px 4px;
   }
   .main {
     margin: 0;

@@ -52,7 +52,12 @@ class RequestMetrics:
         response = self.get_response(request)
         route = str(request.resolver_match.route) if request.resolver_match else "unmatched"
         elapsed = time.perf_counter() - started
-        HTTP_REQUESTS.labels(route, request.method, response.status_code).inc()
+        method = (
+            request.method
+            if request.method in {"GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"}
+            else "OTHER"
+        )
+        HTTP_REQUESTS.labels(route, method, response.status_code).inc()
         HTTP_LATENCY.labels(route).observe(elapsed)
         response["X-Request-ID"] = request.request_id
         response["Cache-Control"] = "no-store"
