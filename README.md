@@ -105,6 +105,8 @@ CI runs PostgreSQL-backed tests on Python 3.12 and 3.13, Redis worker delivery, 
 
 ## Design decisions and boundaries
 
+The [technical review](docs/technical-review.md) marks corrected findings, regression evidence and remaining limitations.
+
 - Shared-schema tenancy is enforced by API scoping and tested across roles and endpoints; it is not PostgreSQL row-level security.
 - Marking a finding resolved is a human workflow decision. Only a subsequent audit provides a new rule result; resolution never silently changes a historic score.
 - The five checks are HTML hygiene rules, not a comprehensive SEO score, accessibility audit or Lighthouse replacement.

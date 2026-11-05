@@ -23,7 +23,7 @@ def apply_event(event, raw_body):
         isinstance(x, str) and 1 <= len(x) <= 100 for x in (event_id, customer_id, invoice_id)
     ):
         raise ValidationError("Invalid provider references")
-    if type(created) is not int or created < 0:
+    if type(created) is not int or not 0 <= created <= 2**63 - 1:
         raise ValidationError("Invalid event time")
     due, paid, currency = (
         invoice.get("amount_due"),
@@ -53,6 +53,8 @@ def apply_event(event, raw_body):
     existing = BillingInvoice.objects.select_for_update().filter(provider_id=invoice_id).first()
     if existing and existing.workspace_id != mapping.workspace_id:
         raise Conflict("Invoice customer mapping conflict")
+    if existing and existing.currency != currency:
+        raise Conflict("Invoice currency conflicts with its existing denomination")
     status = {"invoice.paid": "paid", "invoice.payment_failed": "open", "invoice.voided": "void"}[
         kind
     ]
