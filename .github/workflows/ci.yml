@@ -1,0 +1,99 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  backend:
+    name: Backend (${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    strategy:
+      matrix:
+        python: ['3.12', '3.13']
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: launchsignal
+          POSTGRES_USER: launchsignal
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U launchsignal" --health-interval 3s --health-retries 20
+      redis:
+        image: redis:7.4-alpine
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 3s --health-retries 20
+    env:
+      DJANGO_SECRET_KEY: ci-only-not-a-deployment-secret
+      DATABASE_URL: postgresql://launchsignal:ci-only-password@localhost:5432/launchsignal
+      DJANGO_DEBUG: 'true'
+      CELERY_BROKER_URL: redis://localhost:6379/0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: requirements.lock
+      - run: pip install -r requirements.lock
+      - run: ruff check backend && ruff format --check backend
+      - run: python backend/manage.py makemigrations --check --dry-run
+      - run: pytest
+      - run: pip-audit -r requirements.lock --no-deps --disable-pip && pip-audit -r requirements-runtime.lock --no-deps --disable-pip
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - run: npm install --global pnpm@11.25.0
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+        working-directory: frontend
+      - run: pnpm typecheck && pnpm lint && pnpm build && pnpm audit --prod
+        working-directory: frontend
+  integration:
+    name: Compose & browser
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      POSTGRES_PASSWORD: ci-compose-only
+      DJANGO_SECRET_KEY: ci-compose-only-secret
+      DEMO_PASSWORD: ci-compose-demo-password
+      METRICS_TOKEN: ci-compose-metrics
+      GRAFANA_PASSWORD: ci-compose-grafana
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '24'
+      - run: npm install --global pnpm@11.25.0
+      - run: docker compose --profile observability up --build -d
+      - run: docker compose --profile tools run --rm seed
+      - run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/api/health/ready; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+      - run: pnpm install --frozen-lockfile --ignore-scripts && pnpm exec playwright install --with-deps chromium
+        working-directory: frontend
+      - run: pnpm test:e2e
+        working-directory: frontend
+      - name: Verify telemetry ingestion
+        run: python3 scripts/observability_smoke.py
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose --profile observability logs --tail=120
+      - name: Stop isolated services
+        if: always()
+        run: docker compose --profile observability down -v

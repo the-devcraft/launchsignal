@@ -1,0 +1,20 @@
+local.file_match "application" {
+  path_targets = [{ "__path__" = "/var/log/launchsignal/*.log", "job" = "launchsignal" }]
+}
+loki.source.file "application" {
+  targets = local.file_match.application.targets
+  forward_to = [loki.write.local.receiver]
+}
+loki.write "local" {
+  endpoint { url = "http://loki:3100/loki/api/v1/push" }
+}
+prometheus.scrape "api" {
+  targets = [{ "__address__" = "api:8000", "job" = "launchsignal-api" }]
+  metrics_path = "/api/metrics"
+  scrape_interval = "15s"
+  authorization { credentials = sys.env("METRICS_TOKEN") }
+  forward_to = [prometheus.remote_write.mimir.receiver]
+}
+prometheus.remote_write "mimir" {
+  endpoint { url = "http://mimir:9009/api/v1/push" }
+}

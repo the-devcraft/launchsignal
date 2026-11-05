@@ -1,0 +1,132 @@
+x-app: &app
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+  environment: &environment
+    DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY}
+    DATABASE_URL: postgresql://launchsignal:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@db:5432/launchsignal
+    DJANGO_DEBUG: "true"
+    DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,api
+    APP_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    CELERY_BROKER_URL: redis://redis:6379/0
+    CACHE_URL: redis://redis:6379/1
+    METRICS_TOKEN: ${METRICS_TOKEN:?Set METRICS_TOKEN}
+    STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
+    SENTRY_DSN: ${SENTRY_DSN:-}
+    AUDIT_ALLOWED_HOSTS: ${AUDIT_ALLOWED_HOSTS:-}
+    LOG_DIR: /var/log/launchsignal
+    OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+    OTEL_TRACES_SAMPLER: parentbased_traceidratio
+    OTEL_TRACES_SAMPLER_ARG: "0.2"
+  volumes: [app-logs:/var/log/launchsignal]
+  depends_on:
+    db: {condition: service_healthy}
+    redis: {condition: service_healthy}
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: launchsignal
+      POSTGRES_USER: launchsignal
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U launchsignal -d launchsignal"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7.4-alpine
+    command: [redis-server, --appendonly, "yes"]
+    volumes: [redis-data:/data]
+    healthcheck:
+      test: [CMD, redis-cli, ping]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  migrate:
+    <<: *app
+    command: [python, manage.py, migrate, --noinput]
+  api:
+    <<: *app
+    environment:
+      <<: *environment
+      OTEL_SERVICE_NAME: launchsignal-api
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/ready')"]
+      interval: 5s
+      timeout: 4s
+      retries: 20
+  worker:
+    <<: *app
+    environment:
+      <<: *environment
+      OTEL_SERVICE_NAME: launchsignal-worker
+    command: [celery, -A, config, worker, --loglevel=INFO, --concurrency=2]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  beat:
+    <<: *app
+    environment:
+      <<: *environment
+      OTEL_SERVICE_NAME: launchsignal-dispatcher
+    command: [celery, -A, config, beat, --loglevel=INFO, --schedule=/tmp/celerybeat-schedule]
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      api: {condition: service_healthy}
+  seed:
+    <<: *app
+    profiles: [tools]
+    command: [python, manage.py, seed_demo]
+    environment:
+      <<: *environment
+      DEMO_PASSWORD: ${DEMO_PASSWORD:?Set DEMO_PASSWORD}
+  loki:
+    image: grafana/loki:3.6.0
+    profiles: [observability]
+    command: [-config.file=/etc/loki.yaml]
+    volumes: ["./ops/loki.yaml:/etc/loki.yaml:ro"]
+  tempo:
+    image: grafana/tempo:2.9.0
+    profiles: [observability]
+    command: [-config.file=/etc/tempo.yaml]
+    volumes: ["./ops/tempo.yaml:/etc/tempo.yaml:ro"]
+  mimir:
+    image: grafana/mimir:2.17.0
+    profiles: [observability]
+    command: [-config.file=/etc/mimir.yaml]
+    volumes: ["./ops/mimir.yaml:/etc/mimir.yaml:ro"]
+  alloy:
+    image: grafana/alloy:v1.18.1
+    profiles: [observability]
+    command: [run, /etc/alloy/config.alloy, --storage.path=/var/lib/alloy/data]
+    environment:
+      METRICS_TOKEN: ${METRICS_TOKEN}
+    volumes:
+      - ./ops/config.alloy:/etc/alloy/config.alloy:ro
+      - app-logs:/var/log/launchsignal:ro
+    depends_on: [loki, mimir, api]
+  grafana:
+    image: grafana/grafana:12.2.0
+    profiles: [observability]
+    ports: ["127.0.0.1:3001:3000"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?Set GRAFANA_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./ops/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on: [loki, tempo, mimir]
+volumes:
+  postgres-data:
+  redis-data:
+  app-logs:
